@@ -217,14 +217,6 @@ export default function WatchedPage() {
                                 <span className="ml-2 text-white/50">({r.year})</span>
                               )}
                             </div>
-                            {/* Desktop: show location/source softly on the same row when collapsed */}
-                            {(r.location || r.source) && (
-                              <div className="mt-1 hidden sm:block truncate text-sm text-white/50">
-                                {r.location && <span>{r.location}</span>}
-                                {r.location && r.source && <span className="mx-2">·</span>}
-                                {r.source && <span>{r.source}</span>}
-                              </div>
-                            )}
                           </div>
 
 

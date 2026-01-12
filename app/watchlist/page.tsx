@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Row = {
@@ -45,7 +45,8 @@ function parseLengthToMinutes(input: string): number | null {
   const [hs, ms] = t.split(":");
   const h = Number(hs);
   const m = Number(ms);
-  if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || m < 0 || m >= 60) return null;
+  if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || m < 0 || m >= 60)
+    return null;
   const out = h * 60 + m;
   return out > 0 ? out : null;
 }
@@ -53,6 +54,7 @@ function parseLengthToMinutes(input: string): number | null {
 function priorityLabel(p: Row["priority"]) {
   if (p == null) return "";
   if (p === 0) return "Watching";
+  if (p === 99) return "On Deck";
   return String(p);
 }
 
@@ -123,11 +125,6 @@ export default function WatchlistPage() {
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // Inline priority editing (desktop)
-  const [priorityEdits, setPriorityEdits] = useState<Record<string, string>>({});
-  const pendingFocusIdRef = useRef<string | null>(null);
-  const commitInFlightRef = useRef<Record<string, boolean>>({});
-
   const [watchedModalId, setWatchedModalId] = useState<string | null>(null);
   const [watchedDate, setWatchedDate] = useState<string>(todayISODateLocal());
   const [watchedNote, setWatchedNote] = useState<string>("");
@@ -168,38 +165,6 @@ export default function WatchlistPage() {
 
   const count = useMemo(() => rows.length, [rows]);
 
-  // Sync inline priority text with rows
-  useEffect(() => {
-    setPriorityEdits((cur) => {
-      const next: Record<string, string> = { ...cur };
-
-      for (const r of rows) {
-        if (!(r.id in next)) {
-          next[r.id] = r.priority == null ? "" : String(r.priority);
-        }
-      }
-      for (const id of Object.keys(next)) {
-        if (!rows.some((r) => r.id === id)) delete next[id];
-      }
-      return next;
-    });
-  }, [rows]);
-
-  // After Enter-save, focus next row priority input
-  useEffect(() => {
-    const nextId = pendingFocusIdRef.current;
-    if (!nextId) return;
-
-    pendingFocusIdRef.current = null;
-    requestAnimationFrame(() => {
-      const el = document.getElementById(`priority-input-${nextId}`) as HTMLInputElement | null;
-      if (el) {
-        el.focus();
-        el.select();
-      }
-    });
-  }, [rows]);
-
   function toggleExpanded(id: string) {
     setExpandedId((cur) => {
       const next = cur === id ? null : id;
@@ -229,7 +194,9 @@ export default function WatchlistPage() {
 
     const yearTrim = draft.yearText.trim();
     const yearVal = yearTrim === "" ? null : Number(yearTrim);
-    const yearOk = yearVal == null || (Number.isFinite(yearVal) && yearVal >= 1880 && yearVal <= 2100);
+    const yearOk =
+      yearVal == null ||
+      (Number.isFinite(yearVal) && yearVal >= 1880 && yearVal <= 2100);
 
     const lenVal = parseLengthToMinutes(draft.lengthText);
 
@@ -277,8 +244,6 @@ export default function WatchlistPage() {
     const updated = data as Row;
 
     setRows((cur) => sortWatchlistRows(cur.map((r) => (r.id === id ? updated : r))));
-    setPriorityEdits((cur) => ({ ...cur, [id]: updated.priority == null ? "" : String(updated.priority) }));
-
     setBusyId(null);
     setEditingId(null);
     setDraft(null);
@@ -306,55 +271,28 @@ export default function WatchlistPage() {
     setDraft(null);
   }
 
-  async function commitPriority(id: string) {
-    if (commitInFlightRef.current[id]) return;
-    commitInFlightRef.current[id] = true;
+  async function setOnDeck(id: string) {
+    setBusyId(id);
+    setErr(null);
 
-    try {
-      const row = rows.find((r) => r.id === id);
-      if (!row) return;
+    const { data, error } = await supabase
+      .from("movie_tracker")
+      .update({ priority: 99 })
+      .eq("id", id)
+      .select(
+        "id, created_at, category, title, year, length_minutes, priority, source, location, note, status, date_watched"
+      )
+      .single();
 
-      const raw = (priorityEdits[id] ?? "").trim();
-      const currentRaw = row.priority == null ? "" : String(row.priority);
-
-      if (raw === currentRaw) return;
-
-      let nextPriority: number | null = null;
-      if (raw !== "") {
-        const n = Number(raw);
-        if (!Number.isFinite(n) || n < 0) {
-          setErr("Priority must be blank or a non-negative number.");
-          setPriorityEdits((cur) => ({ ...cur, [id]: currentRaw }));
-          return;
-        }
-        nextPriority = Math.floor(n);
-      }
-
-      setBusyId(id);
-      setErr(null);
-
-      const { data, error } = await supabase
-        .from("movie_tracker")
-        .update({ priority: nextPriority })
-        .eq("id", id)
-        .select(
-          "id, created_at, category, title, year, length_minutes, priority, source, location, note, status, date_watched"
-        )
-        .single();
-
-      if (error) {
-        setErr(error.message);
-        setPriorityEdits((cur) => ({ ...cur, [id]: currentRaw }));
-        return;
-      }
-
-      const updated = data as Row;
-      setRows((cur) => sortWatchlistRows(cur.map((r) => (r.id === id ? updated : r))));
-      setPriorityEdits((cur) => ({ ...cur, [id]: updated.priority == null ? "" : String(updated.priority) }));
-    } finally {
-      setBusyId((cur) => (cur === id ? null : cur));
-      commitInFlightRef.current[id] = false;
+    if (error) {
+      setErr(error.message);
+      setBusyId(null);
+      return;
     }
+
+    const updated = data as Row;
+    setRows((cur) => sortWatchlistRows(cur.map((r) => (r.id === id ? updated : r))));
+    setBusyId(null);
   }
 
   function openWatchedModal(id: string) {
@@ -423,7 +361,7 @@ export default function WatchlistPage() {
           <div className="hidden md:grid grid-cols-[1fr_90px_90px_44px] items-center gap-3 px-3 py-2 text-xs text-white/50">
             <div>Title</div>
             <div className="text-right">Length</div>
-            <div className="text-right">Priority</div>
+            <div className="text-right">Status</div>
             <div />
           </div>
 
@@ -436,7 +374,6 @@ export default function WatchlistPage() {
               rows.map((r) => {
                 const expanded = expandedId === r.id;
                 const isEditing = editingId === r.id;
-                const rowPriorityStr = r.priority == null ? "" : String(r.priority);
 
                 return (
                   <div key={r.id} className="px-3 py-3">
@@ -464,51 +401,36 @@ export default function WatchlistPage() {
                               <div className="shrink-0 text-sm text-white/50">{r.year}</div>
                             )}
                           </div>
-
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/60 md:hidden">
-                            {r.location && <span className="truncate">{r.location}</span>}
-                          </div>
                         </div>
 
                         {/* Length */}
                         <div className="text-right">
-                          <div className="text-sm text-white/80">{minutesToHMM(r.length_minutes)}</div>
+                          <div className="text-sm text-white/80">
+                            {minutesToHMM(r.length_minutes)}
+                          </div>
                         </div>
 
-                        {/* Desktop priority inline edit */}
+                        {/* Desktop: status/plus */}
                         <div className="hidden md:flex justify-end">
-                          <input
-                            id={`priority-input-${r.id}`}
-                            value={priorityEdits[r.id] ?? rowPriorityStr}
-                            onClick={(e) => e.stopPropagation()}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onChange={(e) =>
-                              setPriorityEdits((cur) => ({ ...cur, [r.id]: e.target.value }))
-                            }
-                            onBlur={() => commitPriority(r.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                const idx = rows.findIndex((x) => x.id === r.id);
-                                const nextId =
-                                  idx >= 0 && idx < rows.length - 1 ? rows[idx + 1].id : null;
-                                if (nextId) pendingFocusIdRef.current = nextId;
-
-                                commitPriority(r.id);
-                                (e.currentTarget as HTMLInputElement).blur();
-                              }
-                              if (e.key === "Escape") {
-                                e.preventDefault();
-                                setPriorityEdits((cur) => ({ ...cur, [r.id]: rowPriorityStr }));
-                                (e.currentTarget as HTMLInputElement).blur();
-                              }
-                            }}
-                            inputMode="numeric"
-                            disabled={busyId === r.id || isEditing}
-                            className="w-20 rounded-lg border border-white/10 bg-black/30 px-2 py-1 text-right text-sm text-white/80 outline-none focus:border-white/20 disabled:opacity-60"
-                            aria-label="Priority"
-                            title="Priority (Enter saves, Esc cancels)"
-                          />
+                          {r.priority == null ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOnDeck(r.id);
+                              }}
+                              disabled={busyId === r.id || isEditing}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/80 hover:bg-black/40 disabled:opacity-60"
+                              aria-label="Add to On Deck"
+                              title="Add to On Deck"
+                            >
+                              +
+                            </button>
+                          ) : (
+                            <div className="text-sm text-white/80">
+                              {priorityLabel(r.priority)}
+                            </div>
+                          )}
                         </div>
 
                         {/* Desktop watched button far right */}
@@ -538,9 +460,28 @@ export default function WatchlistPage() {
                           </button>
                         </div>
 
-                        {/* Mobile right side: priority + check */}
+                        {/* Mobile right side: plus/status + check */}
                         <div className="md:hidden flex items-center justify-end gap-3">
-                          <div className="text-xs text-white/60">{priorityLabel(r.priority)}</div>
+                          {r.priority == null ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOnDeck(r.id);
+                              }}
+                              disabled={busyId === r.id || isEditing}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/80 hover:bg-black/40 disabled:opacity-60"
+                              aria-label="Add to On Deck"
+                              title="Add to On Deck"
+                            >
+                              +
+                            </button>
+                          ) : (
+                            <div className="text-xs text-white/60">
+                              {priorityLabel(r.priority)}
+                            </div>
+                          )}
+
                           <button
                             type="button"
                             onClick={(e) => {
@@ -583,19 +524,27 @@ export default function WatchlistPage() {
                               </div>
                               <div>
                                 <div className="text-xs text-white/50">Priority</div>
-                                <div className="text-white/80">{priorityLabel(r.priority) || "—"}</div>
+                                <div className="text-white/80">
+                                  {priorityLabel(r.priority) || "—"}
+                                </div>
                               </div>
                               <div>
                                 <div className="text-xs text-white/50">Source</div>
-                                <div className="text-white/80 whitespace-pre-wrap">{r.source || "—"}</div>
+                                <div className="text-white/80 whitespace-pre-wrap">
+                                  {r.source || "—"}
+                                </div>
                               </div>
                               <div>
                                 <div className="text-xs text-white/50">Location</div>
-                                <div className="text-white/80 whitespace-pre-wrap">{r.location || "—"}</div>
+                                <div className="text-white/80 whitespace-pre-wrap">
+                                  {r.location || "—"}
+                                </div>
                               </div>
                               <div className="md:col-span-2">
                                 <div className="text-xs text-white/50">Notes</div>
-                                <div className="text-white/80 whitespace-pre-wrap">{r.note || "—"}</div>
+                                <div className="text-white/80 whitespace-pre-wrap">
+                                  {r.note || "—"}
+                                </div>
                               </div>
                             </div>
 
@@ -642,7 +591,9 @@ export default function WatchlistPage() {
                                   <label className="text-xs text-white/50">Priority</label>
                                   <input
                                     value={draft.priorityText}
-                                    onChange={(e) => setDraft({ ...draft, priorityText: e.target.value })}
+                                    onChange={(e) =>
+                                      setDraft({ ...draft, priorityText: e.target.value })
+                                    }
                                     inputMode="numeric"
                                     placeholder="(blank)"
                                     className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/20"
@@ -673,7 +624,9 @@ export default function WatchlistPage() {
                                   <label className="text-xs text-white/50">Length</label>
                                   <input
                                     value={draft.lengthText}
-                                    onChange={(e) => setDraft({ ...draft, lengthText: e.target.value })}
+                                    onChange={(e) =>
+                                      setDraft({ ...draft, lengthText: e.target.value })
+                                    }
                                     placeholder='90 or "1:30"'
                                     className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/20"
                                   />
@@ -692,7 +645,9 @@ export default function WatchlistPage() {
                                   <label className="text-xs text-white/50">Location</label>
                                   <input
                                     value={draft.location}
-                                    onChange={(e) => setDraft({ ...draft, location: e.target.value })}
+                                    onChange={(e) =>
+                                      setDraft({ ...draft, location: e.target.value })
+                                    }
                                     className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/20"
                                   />
                                 </div>
