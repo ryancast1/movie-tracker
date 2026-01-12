@@ -124,17 +124,36 @@ export default function WatchedPage() {
     };
   }, []);
 
-  const countText = useMemo(() => {
-    const n = rows.length;
-    return n === 1 ? "1 item" : `${n} items`;
-  }, [rows.length]);
+  const yearStatsText = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+
+    // Days elapsed since Jan 1, inclusive of Jan 1 and today
+    const start = new Date(year, 0, 1);
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const daysElapsed = Math.floor((now.getTime() - start.getTime()) / msPerDay) + 1;
+
+    const watchedThisYear = rows.filter((r) => {
+      if (!r.date_watched) return false;
+      return r.date_watched.startsWith(String(year));
+    }).length;
+
+    const pace = daysElapsed > 0 ? (watchedThisYear * 365) / daysElapsed : 0;
+
+    const total = rows.length;
+    const moviesWord = total === 1 ? "Movie" : "Movies";
+
+    const yWord = watchedThisYear === 1 ? "watched" : "watched";
+
+    return `${total} ${moviesWord}  —  ${watchedThisYear} ${yWord} this year (${Math.round(pace)} pace)`;
+  }, [rows]);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-black to-zinc-950 px-5 py-8 text-white">
       <div className="mx-auto w-full max-w-5xl">
         <header className="mb-6 text-center">
           <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight">Watched</h1>
-          <div className="mt-2 text-sm text-white/60">{countText}</div>
+          <div className="mt-2 text-sm text-white/60">{yearStatsText}</div>
         </header>
 
         <section className="mx-auto w-full max-w-5xl rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5 shadow-[0_10px_60px_rgba(0,0,0,0.65)]">
@@ -155,9 +174,8 @@ export default function WatchedPage() {
 
           {status === "ready" && rows.length > 0 && (
             <div>
-              <div className="hidden sm:grid sm:grid-cols-[1fr_110px_130px] sm:items-center sm:gap-4 sm:px-3 sm:pb-3 text-sm text-white/40">
+              <div className="hidden sm:grid sm:grid-cols-[1fr_130px] sm:items-center sm:gap-4 sm:px-3 sm:pb-3 text-sm text-white/40">
                 <div>Title</div>
-                <div className="text-right">Length</div>
                 <div className="text-right">Watched</div>
               </div>
 
@@ -190,10 +208,10 @@ export default function WatchedPage() {
                       className="w-full text-left"
                     >
                       <div className="px-1 sm:px-3 py-3 sm:py-4">
-                        <div className="grid grid-cols-[1fr_auto] items-start gap-3 sm:grid-cols-[1fr_110px_130px] sm:items-center sm:gap-4">
+                        <div className="grid grid-cols-[1fr_auto] items-start gap-3 sm:grid-cols-[1fr_130px] sm:items-center sm:gap-4">
                           {/* Title */}
                           <div className="min-w-0">
-                            <div className="truncate text-xl font-semibold tracking-tight sm:text-2xl">
+                            <div className="truncate text-lg font-semibold tracking-tight sm:text-xl">
                               {r.title}
                               {typeof r.year === "number" && r.year > 0 && (
                                 <span className="ml-2 text-white/50">({r.year})</span>
@@ -209,19 +227,6 @@ export default function WatchedPage() {
                             )}
                           </div>
 
-                          {/* Mobile: length chip */}
-                          <div className="sm:hidden">
-                            {len ? (
-                              <span className="inline-flex items-center rounded-xl border border-white/10 bg-black/30 px-3 py-1 text-sm text-white/70">
-                                {len}
-                              </span>
-                            ) : null}
-                          </div>
-
-                          {/* Desktop: length */}
-                          <div className="hidden sm:block text-right">
-                            <div className="text-sm text-white/70 tabular-nums">{len ?? "—"}</div>
-                          </div>
 
                           {/* Watched date */}
                           <div className="text-right">
@@ -235,6 +240,12 @@ export default function WatchedPage() {
                     {isOpen && (
                       <div className="-mt-1 px-2 sm:px-4 pb-4">
                         <div className="mt-2 space-y-3 text-sm text-white/60">
+                          {len && (
+                            <div>
+                              <span className="text-white/50">Length: </span>
+                              <span className="text-white/70 tabular-nums">{len}</span>
+                            </div>
+                          )}
                           {/* Top row: category badge + actions */}
                           <div className="flex items-center justify-between gap-2">
                             <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-sm font-semibold text-white/80">
