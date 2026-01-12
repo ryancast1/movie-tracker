@@ -14,7 +14,13 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "Movie Tracker",
-  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
+  applicationName: "Movie Tracker",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Movies",
+  },
+  themeColor: "#000000",
 };
 
 
