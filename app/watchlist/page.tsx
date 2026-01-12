@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
 type Row = {
   id: string;
+  created_at: string | null;
   category: "movie" | "documentary" | null;
   title: string | null;
+  year: number | null;
   length_minutes: number | null;
   priority: number | null;
   source: string | null;
@@ -29,6 +30,12 @@ function catShort(c: Row["category"]) {
   return "M";
 }
 
+function priorityLabel(p: Row["priority"]) {
+  if (p == null) return "";
+  if (p === 0) return "Watching";
+  return String(p);
+}
+
 export default function WatchlistPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,10 +51,13 @@ export default function WatchlistPage() {
 
       const { data, error } = await supabase
         .from("movie_tracker")
-        .select("id, category, title, length_minutes, priority, source, location, note, status")
+        .select(
+          "id, created_at, category, title, year, length_minutes, priority, source, location, note, status"
+        )
         .eq("status", "to_watch")
-        // priority first (nulls last), then title
+        // priority first (nulls last), then newest added
         .order("priority", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: false })
         .order("title", { ascending: true });
 
       if (!alive) return;
@@ -74,11 +84,7 @@ export default function WatchlistPage() {
       <div className="mx-auto w-full max-w-2xl">
         <header className="mb-5">
           <h1 className="text-3xl font-semibold tracking-tight text-center">Watchlist</h1>
-          <div className="mt-2 flex items-center justify-center gap-4 text-sm text-white/60">
-            <Link href="/" className="underline underline-offset-4 hover:text-white">
-              Back
-            </Link>
-            <span>•</span>
+          <div className="mt-2 flex items-center justify-center text-sm text-white/60">
             <span>{loading ? "Loading…" : `${count} items`}</span>
           </div>
         </header>
@@ -91,7 +97,7 @@ export default function WatchlistPage() {
 
         <section className="rounded-2xl border border-white/10 bg-white/5 p-3">
           {/* “Column headers” for desktop-ish widths */}
-          <div className="hidden md:grid grid-cols-[44px_1fr_90px_90px] items-center px-3 py-2 text-xs text-white/50">
+          <div className="hidden md:grid grid-cols-[44px_1fr_90px_110px] items-center gap-3 px-3 py-2 text-xs text-white/50">
             <div>Cat</div>
             <div>Title</div>
             <div className="text-right">Length</div>
@@ -113,37 +119,48 @@ export default function WatchlistPage() {
                     className="w-full text-left"
                   >
                     <div className="px-3 py-3">
-                      {/* top line (table-like) */}
-                      <div className="grid grid-cols-[44px_1fr_auto] items-start gap-3">
+                      {/* row */}
+                      <div className="grid grid-cols-[44px_1fr_96px] md:grid-cols-[44px_1fr_90px_110px] items-start gap-3">
+                        {/* Cat */}
                         <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-sm font-semibold">
                           {catShort(r.category)}
                         </div>
 
+                        {/* Title + submeta */}
                         <div className="min-w-0">
-                          <div className="truncate text-base font-semibold text-white">
-                            {r.title ?? "(untitled)"}
+                          <div className="flex min-w-0 items-baseline gap-2">
+                            <div className="truncate text-base font-semibold text-white">
+                              {r.title ?? "(untitled)"}
+                            </div>
+                            {r.year != null && (
+                              <div className="shrink-0 text-sm text-white/50">{r.year}</div>
+                            )}
                           </div>
 
-                          {/* small “columns” under title for phone */}
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/60">
+                          {/* phone submeta */}
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/60 md:hidden">
                             {r.length_minutes != null && (
                               <span className="rounded-md border border-white/10 bg-black/20 px-2 py-1">
                                 {minutesToHMM(r.length_minutes)}
-                              </span>
-                            )}
-                            {r.priority != null && (
-                              <span className="rounded-md border border-white/10 bg-black/20 px-2 py-1">
-                                P{r.priority}
                               </span>
                             )}
                             {r.location && <span className="truncate">{r.location}</span>}
                           </div>
                         </div>
 
-                        {/* right side (desktop feels) */}
-                        <div className="hidden md:block text-right">
-                          <div className="text-sm text-white/80">{minutesToHMM(r.length_minutes)}</div>
-                          <div className="text-sm text-white/60">{r.priority ?? ""}</div>
+                        {/* Mobile right column: Priority */}
+                        <div className="md:hidden text-right">
+                          <div className="text-sm font-semibold text-white/80">
+                            {priorityLabel(r.priority)}
+                          </div>
+                        </div>
+
+                        {/* Desktop columns */}
+                        <div className="hidden md:block text-right text-sm text-white/80">
+                          {minutesToHMM(r.length_minutes)}
+                        </div>
+                        <div className="hidden md:block text-right text-sm text-white/70">
+                          {priorityLabel(r.priority)}
                         </div>
                       </div>
 
@@ -171,10 +188,6 @@ export default function WatchlistPage() {
                 );
               })
             )}
-          </div>
-
-          <div className="px-3 py-2 text-xs text-white/50">
-            Tap a row to show Source / Location / Notes.
           </div>
         </section>
       </div>
