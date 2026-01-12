@@ -173,7 +173,6 @@ export default function AddMoviePage() {
                   className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-3 outline-none focus:border-white/20"
                 >
                   <option value="to_watch">To watch</option>
-                  <option value="watching">Watching</option>
                   <option value="watched">Watched</option>
                 </select>
               </label>
