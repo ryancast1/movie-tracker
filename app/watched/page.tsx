@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -30,21 +28,64 @@ function minutesToHMM(mins: number | null): string | null {
   return `${h}:${String(m).padStart(2, "0")}`;
 }
 
-function ymdToMD(ymd: string | null): string {
+function ymdToMDY(ymd: string | null): string {
   if (!ymd) return "—";
   // ymd is YYYY-MM-DD
   const [y, m, d] = ymd.split("-");
   if (!y || !m || !d) return ymd;
-  return `${Number(m)}/${Number(d)}`;
+  const yy = y.slice(-2);
+  return `${Number(m)}/${Number(d)}/${yy}`;
 }
 
 function catBadge(c: MovieRow["category"]): string {
   return c === "documentary" ? "D" : "M";
 }
 
+function parseLengthToMinutes(input: string): number | null {
+  const t = input.trim();
+  if (!t) return null;
+  if (/^\d+$/.test(t)) {
+    const n = Number(t);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+  }
+  // Accept h:mm or hh:mm
+  const m = t.match(/^(\d+):(\d{1,2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(mm) || h < 0 || mm < 0 || mm >= 60) return null;
+  const total = h * 60 + mm;
+  return total > 0 ? total : null;
+}
+
+function minutesToInput(mins: number | null): string {
+  if (mins == null || !Number.isFinite(mins) || mins <= 0) return "";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h <= 0) return String(m);
+  return `${h}:${String(m).padStart(2, "0")}`;
+}
+
+type EditDraft = {
+  category: MovieRow["category"];
+  title: string;
+  yearText: string;
+  lengthText: string;
+  status: MovieRow["status"];
+  dateWatched: string; // YYYY-MM-DD or ""
+  priorityText: string;
+  rewatch: boolean;
+  location: string;
+  source: string;
+  note: string;
+};
+
 export default function WatchedPage() {
   const [rows, setRows] = useState<MovieRow[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
@@ -90,13 +131,13 @@ export default function WatchedPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-black to-zinc-950 px-5 py-8 text-white">
-      <div className="mx-auto w-full max-w-4xl">
+      <div className="mx-auto w-full max-w-5xl">
         <header className="mb-6 text-center">
-          <h1 className="text-5xl font-semibold tracking-tight">Watched</h1>
+          <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight">Watched</h1>
           <div className="mt-2 text-sm text-white/60">{countText}</div>
         </header>
 
-        <section className="mx-auto w-full max-w-3xl rounded-3xl border border-white/10 bg-white/5 p-4 shadow-[0_10px_60px_rgba(0,0,0,0.65)]">
+        <section className="mx-auto w-full max-w-5xl rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5 shadow-[0_10px_60px_rgba(0,0,0,0.65)]">
           {status === "loading" && (
             <div className="py-10 text-center text-white/60">Loading…</div>
           )}
@@ -113,87 +154,384 @@ export default function WatchedPage() {
           )}
 
           {status === "ready" && rows.length > 0 && (
-            <div className="divide-y divide-white/10">
+            <div>
+              <div className="hidden sm:grid sm:grid-cols-[1fr_110px_130px] sm:items-center sm:gap-4 sm:px-3 sm:pb-3 text-sm text-white/40">
+                <div>Title</div>
+                <div className="text-right">Length</div>
+                <div className="text-right">Watched</div>
+              </div>
+
+              <div className="divide-y divide-white/10">
               {rows.map((r) => {
                 const isOpen = openId === r.id;
                 const len = minutesToHMM(r.length_minutes);
-                const watched = ymdToMD(r.date_watched);
+                const watched = ymdToMDY(r.date_watched);
 
                 return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
-                    className="w-full text-left"
-                  >
-                    <div className="flex gap-4 py-4">
-                      {/* Category badge */}
-                      <div className="flex w-16 shrink-0 items-start justify-center pt-1">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-black/30 text-2xl font-semibold">
-                          {catBadge(r.category)}
-                        </div>
-                      </div>
-
-                      {/* Main content */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-3xl font-semibold tracking-tight">
+                  <div key={r.id} className="w-full">
+                    {/* Summary row (tap to expand) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenId((prev) => {
+                          const next = prev === r.id ? null : r.id;
+                          // Close edit mode when collapsing or switching rows
+                          if (next === null) {
+                            setEditingId(null);
+                            setEditDraft(null);
+                          }
+                          if (next && next !== prev) {
+                            setEditingId(null);
+                            setEditDraft(null);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="w-full text-left"
+                    >
+                      <div className="px-1 sm:px-3 py-3 sm:py-4">
+                        <div className="grid grid-cols-[1fr_auto] items-start gap-3 sm:grid-cols-[1fr_110px_130px] sm:items-center sm:gap-4">
+                          {/* Title */}
+                          <div className="min-w-0">
+                            <div className="truncate text-xl font-semibold tracking-tight sm:text-2xl">
                               {r.title}
                               {typeof r.year === "number" && r.year > 0 && (
                                 <span className="ml-2 text-white/50">({r.year})</span>
                               )}
                             </div>
+                            {/* Desktop: show location/source softly on the same row when collapsed */}
+                            {(r.location || r.source) && (
+                              <div className="mt-1 hidden sm:block truncate text-sm text-white/50">
+                                {r.location && <span>{r.location}</span>}
+                                {r.location && r.source && <span className="mx-2">·</span>}
+                                {r.source && <span>{r.source}</span>}
+                              </div>
+                            )}
+                          </div>
 
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-white/70">
-                              {len && (
-                                <span className="inline-flex items-center rounded-xl border border-white/10 bg-black/30 px-3 py-1">
-                                  {len}
-                                </span>
-                              )}
+                          {/* Mobile: length chip */}
+                          <div className="sm:hidden">
+                            {len ? (
+                              <span className="inline-flex items-center rounded-xl border border-white/10 bg-black/30 px-3 py-1 text-sm text-white/70">
+                                {len}
+                              </span>
+                            ) : null}
+                          </div>
 
-                              {r.location && (
-                                <span className="truncate text-white/60">{r.location}</span>
+                          {/* Desktop: length */}
+                          <div className="hidden sm:block text-right">
+                            <div className="text-sm text-white/70 tabular-nums">{len ?? "—"}</div>
+                          </div>
+
+                          {/* Watched date */}
+                          <div className="text-right">
+                            <div className="text-sm text-white/60 tabular-nums">{watched}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Expanded panel */}
+                    {isOpen && (
+                      <div className="-mt-1 px-2 sm:px-4 pb-4">
+                        <div className="mt-2 space-y-3 text-sm text-white/60">
+                          {/* Top row: category badge + actions */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-sm font-semibold text-white/80">
+                              {catBadge(r.category)}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2">
+                              {editingId !== r.id ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setEditingId(r.id);
+                                    setEditDraft({
+                                      category: r.category,
+                                      title: r.title ?? "",
+                                      yearText: r.year ? String(r.year) : "",
+                                      lengthText: minutesToInput(r.length_minutes),
+                                      status: r.status,
+                                      dateWatched: r.date_watched ?? "",
+                                      priorityText: r.priority == null ? "" : String(r.priority),
+                                      rewatch: !!r.rewatch,
+                                      location: r.location ?? "",
+                                      source: r.source ?? "",
+                                      note: r.note ?? "",
+                                    });
+                                  }}
+                                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-1.5 text-sm font-semibold text-white/80"
+                                >
+                                  Edit
+                                </button>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setEditingId(null);
+                                      setEditDraft(null);
+                                    }}
+                                    className="rounded-xl border border-white/10 bg-black/30 px-3 py-1.5 text-sm font-semibold text-white/70"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={savingId === r.id}
+                                    onClick={async (e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      if (!editDraft) return;
+
+                                      const yearVal = editDraft.yearText.trim() ? Number(editDraft.yearText.trim()) : null;
+                                      const year =
+                                        yearVal == null || !Number.isFinite(yearVal) || yearVal <= 0
+                                          ? null
+                                          : Math.floor(yearVal);
+
+                                      const length_minutes = parseLengthToMinutes(editDraft.lengthText);
+
+                                      const pr = editDraft.priorityText.trim();
+                                      const priorityVal = pr ? Number(pr) : null;
+                                      const priority =
+                                        priorityVal == null || !Number.isFinite(priorityVal)
+                                          ? null
+                                          : Math.floor(priorityVal);
+
+                                      const payload: Partial<MovieRow> = {
+                                        category: editDraft.category,
+                                        title: editDraft.title.trim(),
+                                        year,
+                                        length_minutes,
+                                        status: editDraft.status,
+                                        date_watched: editDraft.dateWatched.trim() ? editDraft.dateWatched.trim() : null,
+                                        priority,
+                                        rewatch: !!editDraft.rewatch,
+                                        location: editDraft.location.trim() ? editDraft.location.trim() : null,
+                                        source: editDraft.source.trim() ? editDraft.source.trim() : null,
+                                        note: editDraft.note.trim() ? editDraft.note.trim() : null,
+                                      };
+
+                                      try {
+                                        setSavingId(r.id);
+                                        const { error } = await supabase
+                                          .from("movie_tracker")
+                                          .update(payload)
+                                          .eq("id", r.id);
+
+                                        if (error) throw error;
+
+                                        // Update local list
+                                        setRows((prev) => {
+                                          const next = prev.map((x) =>
+                                            x.id === r.id ? ({ ...x, ...payload } as MovieRow) : x
+                                          );
+                                          // If user changed status away from watched, remove it from this list
+                                          return payload.status && payload.status !== "watched"
+                                            ? next.filter((x) => x.id !== r.id)
+                                            : next;
+                                        });
+
+                                        setEditingId(null);
+                                        setEditDraft(null);
+                                      } catch (err: any) {
+                                        alert(`Save failed: ${err?.message ?? String(err)}`);
+                                      } finally {
+                                        setSavingId(null);
+                                      }
+                                    }}
+                                    className="rounded-xl bg-white px-3 py-1.5 text-sm font-semibold text-black disabled:opacity-60"
+                                  >
+                                    {savingId === r.id ? "Saving…" : "Save"}
+                                  </button>
+                                </>
                               )}
                             </div>
                           </div>
 
-                          {/* Watched date (right) */}
-                          <div className="shrink-0 text-right text-sm text-white/60">
-                            <div className="tabular-nums">{watched}</div>
-                          </div>
-                        </div>
+                          {/* Either details or edit form */}
+                          {editingId === r.id && editDraft ? (
+                            <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <label className="block">
+                                  <span className="mb-1 block text-xs text-white/50">Category</span>
+                                  <select
+                                    value={editDraft.category}
+                                    onChange={(e) =>
+                                      setEditDraft((d) =>
+                                        d ? { ...d, category: e.target.value as EditDraft["category"] } : d
+                                      )
+                                    }
+                                    className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
+                                  >
+                                    <option value="movie">Movie</option>
+                                    <option value="documentary">Documentary</option>
+                                  </select>
+                                </label>
 
-                        {isOpen && (
-                          <div className="mt-3 space-y-2 text-sm text-white/60">
-                            {r.source && (
-                              <div>
-                                <span className="text-white/50">Source: </span>
-                                <span className="text-white/70">{r.source}</span>
+                                <label className="block">
+                                  <span className="mb-1 block text-xs text-white/50">Status</span>
+                                  <select
+                                    value={editDraft.status}
+                                    onChange={(e) =>
+                                      setEditDraft((d) =>
+                                        d ? { ...d, status: e.target.value as EditDraft["status"] } : d
+                                      )
+                                    }
+                                    className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
+                                  >
+                                    <option value="to_watch">To Watch</option>
+                                    <option value="watched">Watched</option>
+                                  </select>
+                                </label>
                               </div>
-                            )}
-                            {r.location && (
-                              <div>
-                                <span className="text-white/50">Location: </span>
-                                <span className="text-white/70">{r.location}</span>
+
+                              <label className="block">
+                                <span className="mb-1 block text-xs text-white/50">Title</span>
+                                <input
+                                  value={editDraft.title}
+                                  onChange={(e) =>
+                                    setEditDraft((d) => (d ? { ...d, title: e.target.value } : d))
+                                  }
+                                  className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
+                                />
+                              </label>
+
+                              <div className="grid grid-cols-3 gap-3">
+                                <label className="block">
+                                  <span className="mb-1 block text-xs text-white/50">Year</span>
+                                  <input
+                                    inputMode="numeric"
+                                    value={editDraft.yearText}
+                                    onChange={(e) =>
+                                      setEditDraft((d) => (d ? { ...d, yearText: e.target.value } : d))
+                                    }
+                                    className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="mb-1 block text-xs text-white/50">Length</span>
+                                  <input
+                                    placeholder="90 or 1:30"
+                                    value={editDraft.lengthText}
+                                    onChange={(e) =>
+                                      setEditDraft((d) => (d ? { ...d, lengthText: e.target.value } : d))
+                                    }
+                                    className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="mb-1 block text-xs text-white/50">Priority</span>
+                                  <input
+                                    inputMode="numeric"
+                                    value={editDraft.priorityText}
+                                    onChange={(e) =>
+                                      setEditDraft((d) => (d ? { ...d, priorityText: e.target.value } : d))
+                                    }
+                                    className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
+                                  />
+                                </label>
                               </div>
-                            )}
-                            {r.note && (
-                              <div className="whitespace-pre-wrap">
-                                <span className="text-white/50">Notes: </span>
-                                <span className="text-white/70">{r.note}</span>
+
+                              <label className="block">
+                                <span className="mb-1 block text-xs text-white/50">Date watched</span>
+                                <input
+                                  type="date"
+                                  value={editDraft.dateWatched}
+                                  onChange={(e) =>
+                                    setEditDraft((d) => (d ? { ...d, dateWatched: e.target.value } : d))
+                                  }
+                                  className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
+                                />
+                              </label>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                <label className="block">
+                                  <span className="mb-1 block text-xs text-white/50">Location</span>
+                                  <input
+                                    value={editDraft.location}
+                                    onChange={(e) =>
+                                      setEditDraft((d) => (d ? { ...d, location: e.target.value } : d))
+                                    }
+                                    className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="mb-1 block text-xs text-white/50">Source</span>
+                                  <input
+                                    value={editDraft.source}
+                                    onChange={(e) =>
+                                      setEditDraft((d) => (d ? { ...d, source: e.target.value } : d))
+                                    }
+                                    className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-white outline-none"
+                                  />
+                                </label>
                               </div>
-                            )}
-                            {!r.source && !r.location && !r.note && (
-                              <div className="text-white/40">No extra details.</div>
-                            )}
-                          </div>
-                        )}
+
+                              <label className="block">
+                                <span className="mb-1 block text-xs text-white/50">Notes</span>
+                                <textarea
+                                  rows={3}
+                                  value={editDraft.note}
+                                  onChange={(e) =>
+                                    setEditDraft((d) => (d ? { ...d, note: e.target.value } : d))
+                                  }
+                                  className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
+                                />
+                              </label>
+
+                              <label className="inline-flex items-center gap-2 text-sm text-white/70">
+                                <input
+                                  type="checkbox"
+                                  checked={editDraft.rewatch}
+                                  onChange={(e) =>
+                                    setEditDraft((d) => (d ? { ...d, rewatch: e.target.checked } : d))
+                                  }
+                                />
+                                Rewatch
+                              </label>
+                            </div>
+                          ) : (
+                            <>
+                              {r.source && (
+                                <div>
+                                  <span className="text-white/50">Source: </span>
+                                  <span className="text-white/70">{r.source}</span>
+                                </div>
+                              )}
+                              {r.location && (
+                                <div>
+                                  <span className="text-white/50">Location: </span>
+                                  <span className="text-white/70">{r.location}</span>
+                                </div>
+                              )}
+                              {r.note && (
+                                <div className="whitespace-pre-wrap">
+                                  <span className="text-white/50">Notes: </span>
+                                  <span className="text-white/70">{r.note}</span>
+                                </div>
+                              )}
+                              {!r.source && !r.location && !r.note && (
+                                <div className="text-white/40">No Source / Location / Notes.</div>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </button>
+                    )}
+                  </div>
                 );
               })}
+              </div>
             </div>
           )}
         </section>
