@@ -119,6 +119,16 @@ export default function HomePage() {
     return max;
   }, [rows]);
 
+  function sortOnDeck(list: MovieRow[]): MovieRow[] {
+    return [...list].sort((a, b) => {
+      const ap = a.priority ?? 999999;
+      const bp = b.priority ?? 999999;
+      if (ap !== bp) return ap - bp;
+      // Stable-ish tie-breaker so things don't jump around too much
+      return (a.title ?? "").localeCompare(b.title ?? "");
+    });
+  }
+
   async function movePriority(id: string, direction: "up" | "down") {
     const me = rows.find((r) => r.id === id);
     if (!me) return;
@@ -134,8 +144,13 @@ export default function HomePage() {
           .from("movie_tracker")
           .update({ priority: null })
           .eq("id", id);
-        if (error) alert(`Move failed: ${error.message}`);
-        await load();
+        if (error) {
+          alert(`Move failed: ${error.message}`);
+          await load();
+          return;
+        }
+
+        setRows((prev) => prev.filter((r) => r.id !== id));
         return;
       }
 
@@ -145,8 +160,13 @@ export default function HomePage() {
         .from("movie_tracker")
         .update({ priority: newP })
         .eq("id", id);
-      if (error) alert(`Move failed: ${error.message}`);
-      await load();
+      if (error) {
+        alert(`Move failed: ${error.message}`);
+        await load();
+        return;
+      }
+
+      setRows((prev) => sortOnDeck(prev.map((r) => (r.id === id ? { ...r, priority: newP } : r))));
       return;
     }
 
@@ -159,21 +179,32 @@ export default function HomePage() {
 
     // If this priority has multiple movies, only move the clicked movie.
     if (sameCount > 1) {
-      try {
-        const { error: e2 } = await supabase
-          .from("movie_tracker")
-          .update({ priority: target })
-          .eq("id", id);
-        if (e2) throw e2;
-        await load();
-      } catch (e: any) {
-        alert(`Move failed: ${e?.message ?? "Unknown error"}`);
+      // optimistic UI update (no loading flip, keeps scroll position)
+      setRows((prev) => sortOnDeck(prev.map((r) => (r.id === id ? { ...r, priority: target } : r))));
+
+      const { error: e2 } = await supabase
+        .from("movie_tracker")
+        .update({ priority: target })
+        .eq("id", id);
+      if (e2) {
+        alert(`Move failed: ${e2.message}`);
         await load();
       }
       return;
     }
 
     // Otherwise, swap with the movie/batch at the target priority.
+    // optimistic UI update
+    setRows((prev) =>
+      sortOnDeck(
+        prev.map((r) => {
+          if (r.id === id) return { ...r, priority: target };
+          if (r.status === "to_watch" && r.priority === target) return { ...r, priority: p };
+          return r;
+        })
+      )
+    );
+
     try {
       const { error: e1 } = await supabase
         .from("movie_tracker")
@@ -188,7 +219,7 @@ export default function HomePage() {
         .eq("id", id);
       if (e2) throw e2;
 
-      await load();
+      // No full reload: the UI is already updated.
     } catch (e: any) {
       alert(`Move failed: ${e?.message ?? "Unknown error"}`);
       await load();
@@ -315,7 +346,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-black to-zinc-950 px-5 py-8 text-white">
+    <main className="min-h-screen bg-gradient-to-b from-black to-zinc-950 px-3 sm:px-5 py-8 text-white">
       <div className="mx-auto w-full max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-3xl">
         <header className="mb-6">
           <h1 className="text-3xl font-semibold tracking-tight text-center">Movies</h1>
@@ -347,7 +378,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="px-2 pb-2">
+          <div className="px-1 sm:px-2 pb-2">
             <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
               {err ? (
                 <div className="p-3 text-sm text-red-300">{err}</div>
@@ -376,7 +407,7 @@ export default function HomePage() {
                               setExpandedId((cur) => (cur === m.id ? null : m.id));
                             }
                           }}
-                          className="px-2 py-2 rounded-lg hover:bg-white/5 transition"
+                          className="px-1.5 py-1.5 sm:px-2 sm:py-2 rounded-lg hover:bg-white/5 transition"
                         >
                           <div className="flex items-center gap-2">
                             {/* Title */}
@@ -392,8 +423,8 @@ export default function HomePage() {
                             </div>
 
                             {/* Compact right cluster */}
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <div className="w-[40px] text-right text-[13px] tabular-nums text-white/70">
+                            <div className="flex items-center gap-1 shrink-0">
+                              <div className="w-[34px] sm:w-[40px] text-right text-[12px] sm:text-[13px] tabular-nums text-white/70">
                                 {dur}
                               </div>
 
@@ -404,7 +435,7 @@ export default function HomePage() {
                                   e.stopPropagation();
                                   movePriority(m.id, "up");
                                 }}
-                                className="h-8 w-8 rounded-lg border border-white/10 bg-white/5 grid place-items-center text-white/85 active:scale-[0.98] transition"
+                                className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg border border-white/10 bg-white/5 grid place-items-center text-[12px] sm:text-[13px] text-white/85 active:scale-[0.98] transition"
                               >
                                 ▲
                               </button>
@@ -415,12 +446,12 @@ export default function HomePage() {
                                   e.stopPropagation();
                                   movePriority(m.id, "down");
                                 }}
-                                className="h-8 w-8 rounded-lg border border-white/10 bg-white/5 grid place-items-center text-white/85 active:scale-[0.98] transition"
+                                className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg border border-white/10 bg-white/5 grid place-items-center text-[12px] sm:text-[13px] text-white/85 active:scale-[0.98] transition"
                               >
                                 ▼
                               </button>
 
-                              <div className="w-[28px] text-right text-[13px] text-white/65 tabular-nums">
+                              <div className="w-[22px] sm:w-[28px] text-right text-[12px] sm:text-[13px] text-white/65 tabular-nums">
                                 {prLabel === "W" ? (
                                   <span className="sm:hidden">W</span>
                                 ) : prLabel === "OD" ? (
@@ -437,7 +468,7 @@ export default function HomePage() {
                                   e.stopPropagation();
                                   openWatchedModal(m.id);
                                 }}
-                                className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 grid place-items-center text-white/90 active:scale-[0.98] transition"
+                                className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl border border-white/10 bg-white/5 grid place-items-center text-white/90 active:scale-[0.98] transition"
                               >
                                 ✓
                               </button>
