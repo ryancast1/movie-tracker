@@ -348,7 +348,7 @@ export default function WatchlistPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-black to-zinc-950 px-5 py-8 text-white">
+    <main className="min-h-screen bg-gradient-to-b from-black to-zinc-950 px-3 sm:px-5 py-7 text-white">
       <div className="mx-auto w-full max-w-2xl">
         <header className="mb-5">
           <h1 className="text-3xl font-semibold tracking-tight text-center">Watchlist</h1>
@@ -363,9 +363,9 @@ export default function WatchlistPage() {
           </div>
         )}
 
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-2">
+        <section className="rounded-2xl border border-white/10 bg-white/5 p-1 sm:p-2">
           {/* Desktop-ish column headers */}
-          <div className="hidden md:grid grid-cols-[1fr_90px_90px_44px] items-center gap-3 px-3 py-2 text-xs text-white/50">
+          <div className="hidden md:grid grid-cols-[1fr_90px_90px_44px] items-center gap-3 px-2 py-2 text-xs text-white/50">
             <div>Title</div>
             <div className="text-right">Length</div>
             <div className="text-right">Status</div>
@@ -383,7 +383,7 @@ export default function WatchlistPage() {
                 const isEditing = editingId === r.id;
 
                 return (
-                  <div key={r.id} className="px-3 py-2">
+                  <div key={r.id} className="px-2 py-2">
                     {/* Clickable header */}
                     <div
                       role="button"
@@ -397,7 +397,7 @@ export default function WatchlistPage() {
                       }}
                       className="rounded-xl outline-none focus:ring-2 focus:ring-white/10"
                     >
-                    <div className="grid grid-cols-[minmax(0,1fr)_64px_44px_40px] sm:grid-cols-[minmax(0,1fr)_72px_52px_44px] md:grid-cols-[minmax(0,1fr)_90px_90px_44px] items-center gap-2 sm:gap-3">
+                    <div className="grid grid-cols-[minmax(0,1fr)_48px_40px_36px] sm:grid-cols-[minmax(0,1fr)_64px_44px_40px] md:grid-cols-[minmax(0,1fr)_90px_90px_44px] items-center gap-1 sm:gap-2">
                         {/* Title + year */}
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-baseline gap-2">
@@ -412,7 +412,7 @@ export default function WatchlistPage() {
 
                         {/* Length */}
                         <div className="text-right">
-                          <div className="text-xs sm:text-sm text-white/80 tabular-nums whitespace-nowrap">
+                          <div className="text-[11px] sm:text-sm text-white/80 tabular-nums whitespace-nowrap">
                             {minutesToHMM(r.length_minutes)}
                           </div>
                         </div>
@@ -427,7 +427,7 @@ export default function WatchlistPage() {
                                 setOnDeck(r.id);
                               }}
                               disabled={busyId === r.id || isEditing}
-                              className="flex h-7 w-7 md:h-9 md:w-9 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/80 hover:bg-black/40 disabled:opacity-60"
+                              className="flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/80 hover:bg-black/40 disabled:opacity-60"
                               aria-label="Add to On Deck"
                               title="Add to On Deck"
                             >
@@ -452,7 +452,7 @@ export default function WatchlistPage() {
                               openWatchedModal(r.id);
                             }}
                             disabled={busyId === r.id}
-                            className="flex h-7 w-7 md:h-9 md:w-9 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/80 hover:bg-black/40 disabled:opacity-60"
+                            className="flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/80 hover:bg-black/40 disabled:opacity-60"
                             aria-label="Mark watched"
                             title="Mark watched"
                           >
