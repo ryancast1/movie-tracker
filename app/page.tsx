@@ -175,55 +175,69 @@ export default function HomePage() {
 
     const target = direction === "up" ? p - 1 : p + 1;
 
-    const sameCount = rows.filter((r) => r.priority === p && r.status === "to_watch").length;
+    const sameCount = rows.filter((r) => r.status === "to_watch" && r.priority === p).length;
+const targetCount = rows.filter((r) => r.status === "to_watch" && r.priority === target).length;
 
-    // If this priority has multiple movies, only move the clicked movie.
-    if (sameCount > 1) {
-      // optimistic UI update (no loading flip, keeps scroll position)
-      setRows((prev) => sortOnDeck(prev.map((r) => (r.id === id ? { ...r, priority: target } : r))));
+// Only swap if BOTH sides are singletons (exactly 1 in current priority and 1 in target priority).
+// Special rule: never swap when moving *down* from Watching (0) to 1. Downgrading Watching should not promote another movie to Watching.
+const shouldSwap = sameCount === 1 && targetCount === 1 && !(p === 0 && direction === "down");
 
-      const { error: e2 } = await supabase
-        .from("movie_tracker")
-        .update({ priority: target })
-        .eq("id", id);
-      if (e2) {
-        alert(`Move failed: ${e2.message}`);
-        await load();
-      }
-      return;
-    }
+// If either side is a batch (or there is no target movie), only move the clicked movie.
+if (!shouldSwap) {
+  // optimistic UI update (no loading flip, keeps scroll position)
+  setRows((prev) =>
+    sortOnDeck(prev.map((r) => (r.id === id ? { ...r, priority: target } : r)))
+  );
 
-    // Otherwise, swap with the movie/batch at the target priority.
-    // optimistic UI update
-    setRows((prev) =>
-      sortOnDeck(
-        prev.map((r) => {
-          if (r.id === id) return { ...r, priority: target };
-          if (r.status === "to_watch" && r.priority === target) return { ...r, priority: p };
-          return r;
-        })
-      )
-    );
+  const { error: e2 } = await supabase
+    .from("movie_tracker")
+    .update({ priority: target })
+    .eq("id", id);
 
-    try {
-      const { error: e1 } = await supabase
-        .from("movie_tracker")
-        .update({ priority: p })
-        .eq("status", "to_watch")
-        .eq("priority", target);
-      if (e1) throw e1;
+  if (e2) {
+    alert(`Move failed: ${e2.message}`);
+    await load();
+  }
+  return;
+}
 
-      const { error: e2 } = await supabase
-        .from("movie_tracker")
-        .update({ priority: target })
-        .eq("id", id);
-      if (e2) throw e2;
+// Swap with the single movie at the target priority.
+const targetRowId = rows.find((r) => r.status === "to_watch" && r.priority === target)?.id;
+if (!targetRowId) {
+  // Shouldn't happen because shouldSwap implies there's exactly one target, but guard anyway.
+  await load();
+  return;
+}
 
-      // No full reload: the UI is already updated.
-    } catch (e: any) {
-      alert(`Move failed: ${e?.message ?? "Unknown error"}`);
-      await load();
-    }
+// optimistic UI update
+setRows((prev) =>
+  sortOnDeck(
+    prev.map((r) => {
+      if (r.id === id) return { ...r, priority: target };
+      if (r.id === targetRowId) return { ...r, priority: p };
+      return r;
+    })
+  )
+);
+
+try {
+  const { error: e1 } = await supabase
+    .from("movie_tracker")
+    .update({ priority: p })
+    .eq("id", targetRowId);
+  if (e1) throw e1;
+
+  const { error: e2 } = await supabase
+    .from("movie_tracker")
+    .update({ priority: target })
+    .eq("id", id);
+  if (e2) throw e2;
+
+  // No full reload: UI already updated.
+} catch (e: any) {
+  alert(`Move failed: ${e?.message ?? "Unknown error"}`);
+  await load();
+}
   }
 
   function openEditModal(id: string) {
