@@ -58,6 +58,13 @@ function priorityLabel(p: Row["priority"]) {
   return String(p);
 }
 
+function priorityLabelCompact(p: Row["priority"]) {
+  if (p == null) return "";
+  if (p === 0) return "Watch";
+  if (p === 99) return "OD";
+  return String(p);
+}
+
 function catLong(c: Row["category"]) {
   if (c === "documentary") return "Documentary";
   if (c === "movie") return "Movie";
@@ -390,7 +397,7 @@ export default function WatchlistPage() {
                       }}
                       className="rounded-xl outline-none focus:ring-2 focus:ring-white/10"
                     >
-                      <div className="grid grid-cols-[1fr_64px_88px_44px] md:grid-cols-[1fr_90px_90px_44px] items-center gap-3">
+                      <div className="grid grid-cols-[minmax(0,1fr)_52px_64px_40px] sm:grid-cols-[minmax(0,1fr)_60px_72px_44px] md:grid-cols-[minmax(0,1fr)_90px_90px_44px] items-center gap-2 sm:gap-3">
                         {/* Title + year */}
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-baseline gap-2">
@@ -405,7 +412,7 @@ export default function WatchlistPage() {
 
                         {/* Length */}
                         <div className="text-right">
-                          <div className="text-sm text-white/80">
+                          <div className="text-xs sm:text-sm text-white/80 tabular-nums whitespace-nowrap">
                             {minutesToHMM(r.length_minutes)}
                           </div>
                         </div>
@@ -420,16 +427,19 @@ export default function WatchlistPage() {
                                 setOnDeck(r.id);
                               }}
                               disabled={busyId === r.id || isEditing}
-                              className="flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/80 hover:bg-black/40 disabled:opacity-60"
+                              className="flex h-7 w-7 md:h-9 md:w-9 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/80 hover:bg-black/40 disabled:opacity-60"
                               aria-label="Add to On Deck"
                               title="Add to On Deck"
                             >
                               +
                             </button>
                           ) : (
-                            <div className="text-xs md:text-sm text-white/60">
-                              {priorityLabel(r.priority)}
-                            </div>
+                            <div className="text-[11px] sm:text-xs md:text-sm text-white/60 tabular-nums whitespace-nowrap">
+  <span className="inline md:hidden" title={priorityLabel(r.priority)}>
+    {priorityLabelCompact(r.priority)}
+  </span>
+  <span className="hidden md:inline">{priorityLabel(r.priority)}</span>
+</div>
                           )}
                         </div>
 
@@ -442,13 +452,13 @@ export default function WatchlistPage() {
                               openWatchedModal(r.id);
                             }}
                             disabled={busyId === r.id}
-                            className="flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/80 hover:bg-black/40 disabled:opacity-60"
+                            className="flex h-7 w-7 md:h-9 md:w-9 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-white/80 hover:bg-black/40 disabled:opacity-60"
                             aria-label="Mark watched"
                             title="Mark watched"
                           >
                             <svg
                               viewBox="0 0 24 24"
-                              className="h-5 w-5"
+                              className="h-4 w-4 sm:h-5 sm:w-5"
                               fill="none"
                               stroke="currentColor"
                               strokeWidth="2"
