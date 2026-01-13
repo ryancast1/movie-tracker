@@ -171,11 +171,34 @@ export default function HomePage() {
     }
 
     // bounds for watching
-    if (p === 0 && direction === "up") return;
+if (p === 0 && direction === "up") return;
 
-    const target = direction === "up" ? p - 1 : p + 1;
+const target = direction === "up" ? p - 1 : p + 1;
 
-    const sameCount = rows.filter((r) => r.status === "to_watch" && r.priority === p).length;
+const sameCount = rows.filter((r) => r.status === "to_watch" && r.priority === p).length;
+
+// NEW: if this movie is the *only* one at the current highest non-99 priority,
+// a single DOWN click should demote it directly to On Deck (99).
+if (direction === "down" && p === maxNon99Priority && sameCount === 1) {
+  const newP = 99;
+
+  // optimistic UI update (keeps scroll position)
+  setRows((prev) =>
+    sortOnDeck(prev.map((r) => (r.id === id ? { ...r, priority: newP } : r)))
+  );
+
+  const { error: e2 } = await supabase
+    .from("movie_tracker")
+    .update({ priority: newP })
+    .eq("id", id);
+
+  if (e2) {
+    alert(`Move failed: ${e2.message}`);
+    await load();
+  }
+  return;
+}
+
 const targetCount = rows.filter((r) => r.status === "to_watch" && r.priority === target).length;
 
 // Only swap if BOTH sides are singletons (exactly 1 in current priority and 1 in target priority).

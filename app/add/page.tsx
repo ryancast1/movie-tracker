@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type Category = "movie" | "documentary";
@@ -28,6 +29,7 @@ function parseLengthToMinutes(input: string): number | null {
 }
 
 export default function AddMoviePage() {
+  const router = useRouter();
   const [category, setCategory] = useState<Category>("movie");
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<Status>("to_watch");
@@ -115,18 +117,8 @@ export default function AddMoviePage() {
     setMsg("Saved ✓");
     setSaving(false);
 
-    // reset all fields (no samples)
-    setCategory("movie");
-    setTitle("");
-    setStatus("to_watch");
-    setSource("");
-    setLengthText("");
-    setPriorityText("");
-    setRewatch(false);
-    setLocation("");
-    setYearText("");
-    setDateWatched("");
-    setNote("");
+    // Go back to the home screen after save
+    router.push("/");
   }
 
   return (
