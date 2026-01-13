@@ -60,7 +60,7 @@ function priorityLabel(p: Row["priority"]) {
 
 function priorityLabelCompact(p: Row["priority"]) {
   if (p == null) return "";
-  if (p === 0) return "Watch";
+  if (p === 0) return "Watching";
   if (p === 99) return "OD";
   return String(p);
 }
@@ -397,7 +397,7 @@ export default function WatchlistPage() {
                       }}
                       className="rounded-xl outline-none focus:ring-2 focus:ring-white/10"
                     >
-                      <div className="grid grid-cols-[minmax(0,1fr)_52px_64px_40px] sm:grid-cols-[minmax(0,1fr)_60px_72px_44px] md:grid-cols-[minmax(0,1fr)_90px_90px_44px] items-center gap-2 sm:gap-3">
+                    <div className="grid grid-cols-[minmax(0,1fr)_64px_44px_40px] sm:grid-cols-[minmax(0,1fr)_72px_52px_44px] md:grid-cols-[minmax(0,1fr)_90px_90px_44px] items-center gap-2 sm:gap-3">
                         {/* Title + year */}
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-baseline gap-2">
