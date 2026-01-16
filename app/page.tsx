@@ -350,6 +350,9 @@ try {
       return;
     }
 
+    // capture the priority before we null it out
+    const watchedPriority = watchingRow.priority;
+
     const extra = watchedNote.trim();
     const existing = (watchingRow.note ?? "").trim();
     const mergedNote =
@@ -378,7 +381,38 @@ try {
       return;
     }
 
+    // Close the modal immediately
     setWatchingId(null);
+
+    // Rebalance priorities: close the gap by decrementing all priorities above the watched one
+    // (ignore null and OD=99)
+    if (watchedPriority !== null && watchedPriority !== 99) {
+      try {
+        const { data: affected, error: selErr } = await supabase
+          .from("movie_tracker")
+          .select("id,priority")
+          .eq("status", "to_watch")
+          .not("priority", "is", null)
+          .neq("priority", 99)
+          .gt("priority", watchedPriority);
+
+        if (selErr) throw selErr;
+
+        const updates = (affected ?? []).map((r: any) => {
+          const nextP = Math.max(0, (r.priority as number) - 1);
+          return supabase.from("movie_tracker").update({ priority: nextP }).eq("id", r.id);
+        });
+
+        if (updates.length > 0) {
+          const results = await Promise.all(updates);
+          const firstErr = results.find((res: any) => res?.error)?.error;
+          if (firstErr) throw firstErr;
+        }
+      } catch (e: any) {
+        alert(`Priority rebalance failed: ${e?.message ?? "Unknown error"}`);
+      }
+    }
+
     await load();
   }
 

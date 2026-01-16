@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import Link from "next/link";
 
 type MovieRow = {
   id: string;
@@ -151,10 +152,24 @@ export default function WatchedPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-black to-zinc-950 px-5 py-8 text-white">
       <div className="mx-auto w-full max-w-5xl">
-        <header className="mb-6 text-center">
-          <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight">Watched</h1>
-          <div className="mt-2 text-sm text-white/60">{yearStatsText}</div>
-        </header>
+        <header className="mb-6">
+  <div className="relative mx-auto max-w-5xl">
+    <h1 className="text-center text-4xl sm:text-5xl font-semibold tracking-tight">
+      Watched
+    </h1>
+
+    <div className="absolute right-0 top-1/2 -translate-y-1/2">
+      <Link
+        href="/watched/calendar"
+        className="inline-flex items-center rounded-xl border border-white/10 bg-black/30 px-3 py-1.5 text-sm font-semibold text-white/80 hover:border-white/20 hover:bg-black/40"
+      >
+        Calendar
+      </Link>
+    </div>
+
+    <div className="mt-2 text-center text-sm text-white/60">{yearStatsText}</div>
+  </div>
+</header>
 
         <section className="mx-auto w-full max-w-5xl rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-5 shadow-[0_10px_60px_rgba(0,0,0,0.65)]">
           {status === "loading" && (
