@@ -142,8 +142,8 @@ export default function WatchedCalendarPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-black to-zinc-950 px-4 py-8 text-white flex items-center justify-center">
-      <div className="mx-auto w-full max-w-4xl">
+    <main className="min-h-screen bg-gradient-to-b from-black to-zinc-950 px-4 py-6 sm:py-10 text-white flex items-start justify-center">
+      <div className="mx-auto w-full max-w-[980px]">
         <header className="mb-4 flex items-center justify-between">
           <h1 className="text-3xl font-semibold tracking-tight">Watched Calendar</h1>
           <Link
@@ -155,12 +155,19 @@ export default function WatchedCalendarPage() {
         </header>
 
         <div
-          className="rounded-3xl border border-white/10 bg-black/20 p-4 sm:p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_80px_rgba(0,0,0,0.65)]"
-          style={{ ["--cell" as any]: "clamp(14px,3.1vw,22px)" }}
+          className="mx-auto w-full rounded-3xl border border-white/10 bg-black/20 p-3 sm:p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_80px_rgba(0,0,0,0.65)]"
+          style={{
+            ["--cell" as any]: "clamp(20px, 12vw, 34px)",
+            ["--grid" as any]: "calc(var(--cell) * 7)",
+          }}
         >
           <div
-            className="mb-3 grid text-center text-[11px] font-medium tracking-wide text-white/55"
-            style={{ gridTemplateColumns: "repeat(7, var(--cell))", gap: 0 }}
+            className="mx-auto mb-3 grid text-center text-[11px] font-medium tracking-wide text-white/55"
+            style={{
+              width: "var(--grid)",
+              gridTemplateColumns: "repeat(7, var(--cell))",
+              gap: 0,
+            }}
           >
             <div>M</div>
             <div>T</div>
@@ -174,81 +181,73 @@ export default function WatchedCalendarPage() {
           {error ? (
             <div className="text-sm text-red-300">{error}</div>
           ) : (
-            <div className="max-h-[72vh] overflow-auto">
-              {/* Grid area with side month labels */}
-              <div className="relative inline-block">
-                {/* Month labels (left + right) aligned to week rows */}
-                {weekRows.map((w, rowIdx) => {
-                  if (!w.monthLabel) return null;
-                  return (
-                    <div key={`ml-${rowIdx}`}>
-                      <div
-                        className="pointer-events-none absolute -left-6 text-[10px] font-semibold tracking-wide text-white/40"
-                        style={{
-                          top: `calc(var(--cell) * ${rowIdx} + (var(--cell) / 2))`,
-                          transform: "translateY(-50%) rotate(-90deg)",
-                          transformOrigin: "center",
-                        }}
-                      >
-                        {w.monthLabel}
-                      </div>
-                      <div
-                        className="pointer-events-none absolute -right-6 text-[10px] font-semibold tracking-wide text-white/40"
-                        style={{
-                          top: `calc(var(--cell) * ${rowIdx} + (var(--cell) / 2))`,
-                          transform: "translateY(-50%) rotate(90deg)",
-                          transformOrigin: "center",
-                        }}
-                      >
-                        {w.monthLabel}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Weeks: top row is current week, then backward */}
-                <div className="flex flex-col">
+            <div className="max-h-[calc(100dvh-210px)] overflow-auto">
+              <div className="flex justify-center">
+                {/* Grid area with side month labels */}
+                <div className="relative" style={{ width: "var(--grid)" }}>
+                  {/* Month labels (left + right) aligned to week rows */}
                   {weekRows.map((w, rowIdx) => {
+                    if (!w.monthLabel) return null;
                     return (
-                      <div
-                        key={`row-${rowIdx}`}
-                        className="grid"
-                        style={{
-                          gridTemplateColumns: "repeat(7, var(--cell))",
-                          gridAutoRows: "var(--cell)",
-                          gap: 0,
-                        }}
-                      >
-                        {w.cells.map((iso, i) => {
-                          const inRange = iso >= startISO && iso <= todayISO;
-                          const filled = watchedDays.has(iso);
-
-                          // Dim squares outside range (future days / before 1/1/2024).
-                          const baseOpacity = inRange ? "opacity-100" : "opacity-35";
-
-                          const dayNum = dayOfMonthFromISO(iso);
-
-                          return (
-                            <div
-                              key={`${rowIdx}-${i}-${iso}`}
-                              title={iso}
-                              className={
-                                `relative border border-white/10 ${baseOpacity} ` +
-                                (filled
-                                  ? "bg-emerald-500/80 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
-                                  : "bg-black/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]")
-                              }
-                              style={{ borderRadius: "8px" }}
-                            >
-                              <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-white/35">
-                                {dayNum}
-                              </span>
-                            </div>
-                          );
-                        })}
+                      <div key={`ml-${rowIdx}`}>
+                        <div
+                          className="pointer-events-none absolute left-[-26px] text-[10px] font-semibold tracking-wide text-white/40"
+                          style={{
+                            top: `calc(var(--cell) * ${rowIdx} + (var(--cell) / 2))`,
+                            transform: "translateY(-50%) rotate(-90deg)",
+                            transformOrigin: "center",
+                          }}
+                        >
+                          {w.monthLabel}
+                        </div>
                       </div>
                     );
                   })}
+
+                  {/* Weeks: top row is current week, then backward */}
+                  <div className="flex flex-col" style={{ width: "var(--grid)" }}>
+                    {weekRows.map((w, rowIdx) => {
+                      return (
+                        <div
+                          key={`row-${rowIdx}`}
+                          className="grid"
+                          style={{
+                            gridTemplateColumns: "repeat(7, var(--cell))",
+                            gridAutoRows: "var(--cell)",
+                            gap: 0,
+                          }}
+                        >
+                          {w.cells.map((iso, i) => {
+                            const inRange = iso >= startISO && iso <= todayISO;
+                            const filled = watchedDays.has(iso);
+
+                            // Dim squares outside range (future days / before 1/1/2024).
+                            const baseOpacity = inRange ? "opacity-100" : "opacity-35";
+
+                            const dayNum = dayOfMonthFromISO(iso);
+
+                            return (
+                              <div
+                                key={`${rowIdx}-${i}-${iso}`}
+                                title={iso}
+                                className={
+                                  `relative border border-white/10 ${baseOpacity} ` +
+                                  (filled
+                                    ? "bg-emerald-500/80 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+                                    : "bg-black/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]")
+                                }
+                                style={{ borderRadius: "8px" }}
+                              >
+                                <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-white/35">
+                                  {dayNum}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
